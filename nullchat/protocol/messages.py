@@ -5,9 +5,9 @@ class Message:
     def __init__(self, room_id, sender_id, nonce, ciphertext, timestamp=None):
         self.room_id = room_id
         self.sender_id = sender_id
-        self.nonce = nonce
-        self.ciphertext = ciphertext
-        self.timestamp = timestamp or time.time()
+        self.nonce = nonce  # random value to decrypt the message
+        self.ciphertext = ciphertext  # the encrypted message 
+        self.timestamp = timestamp or time.time()  # defaults to now if not given
 
     @classmethod
     def encrypt(cls, crypto, room_id, sender_id, plaintext): # creates a message object
@@ -23,3 +23,11 @@ class Message:
     @staticmethod
     def from_wire(data): # converts the bytes into a message object
         return Message(**json.loads(data.decode("utf-8")))
+
+
+def build_message(crypto, room_id, sender_id, plaintext):
+    return Message.encrypt(crypto, room_id, sender_id, plaintext)
+
+
+def read_message(crypto, msg):
+    return msg.decrypt(crypto)

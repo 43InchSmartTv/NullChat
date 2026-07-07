@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from nullchat.network.message_bus import MessageBus
 from nullchat.network.axl_bridge import InboundMessage
 from nullchat.crypto.room import RoomCrypto
-from nullchat.protocol.messages import Message, read_message
+from nullchat.protocol.messages import Message
 
 
 @dataclass
@@ -77,7 +77,7 @@ class MessageConsumer:
             return 
 
         try:
-            plaintext = read_message(crypto, msg) # decrypt the message
+            plaintext = msg.decrypt(crypto) # decrypt the message
         except Exception:
             return  
 
