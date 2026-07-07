@@ -2,6 +2,8 @@
 # started from gensyn's example client:
 # https://github.com/gensyn-ai/axl/blob/main/examples/python-client/client.py
 
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from typing import Any
