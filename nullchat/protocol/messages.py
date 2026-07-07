@@ -25,9 +25,9 @@ class Message:
         return Message(**json.loads(data.decode("utf-8")))
 
 
-def build_message(crypto, room_id, sender_id, plaintext):
+def build_message(crypto, room_id, sender_id, plaintext): # wraps encryption of the message
     return Message.encrypt(crypto, room_id, sender_id, plaintext)
 
 
-def read_message(crypto, msg):
+def read_message(crypto, msg): # wraps decryption of the message
     return msg.decrypt(crypto)
