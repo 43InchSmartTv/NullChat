@@ -24,7 +24,7 @@ def _parse_line(line: str) -> tuple[str, int] | None:
 
     total = 0
     if "," in parts[1]:
-        #v3 format is word \t year,match_count,volume_count
+        #v3 format is l word \t year,match_count,volume_count
         for triple in parts[1:]:
             fields = triple.split(",")
             if len(fields) >= 2:
@@ -46,6 +46,7 @@ def _open_maybe_gzip(path: Path):
 
 
 def load_ngram_counts(
+    ## reserved for using .gz files // benchmarking
     paths: Iterable[str | Path],
     min_count: int = 1,
     max_words: int | None = None,
@@ -66,4 +67,14 @@ def load_ngram_counts(
     if max_words is not None and len(counts) > max_words:
         top = sorted(counts.items(), key=lambda it: -it[1])[:max_words]
         counts = dict(top)
+    return counts
+
+def load_counts_table(path):
+    ## reserved for vocab.tsv.gz file // app
+    counts = {}
+    with _open_maybe_gzip(Path(path)) as f:
+        for line in f:
+            word, _, count = line.rstrip("\n").partition("\t")
+            if word and count:
+                counts[word] = int(count)
     return counts
