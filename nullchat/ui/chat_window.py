@@ -58,13 +58,13 @@ class ChatWindow(tk.Tk):
 
         tk.Button(
             btn_frame, text="✨ Create Room", font=("Segoe UI", 9, "bold"),
-            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=5, pady=2,
+            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=6, pady=2,
             command=self._create_room
         ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
 
         tk.Button(
             btn_frame, text="🔗 Join Room", font=("Segoe UI", 9, "bold"),
-            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=5, pady=2,
+            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=6, pady=2,
             command=self._join_room
         ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
 
@@ -87,7 +87,7 @@ class ChatWindow(tk.Tk):
             is_selected = (room_id == self.current_room_id)
             bg_color = C_SIDEBAR_SELECTED if is_selected else C_SIDEBAR_BG
 
-            contact_frame = tk.Frame(self.sidebar, bg=bg_color, pady=15, padx=15)
+            contact_frame = tk.Frame(self.sidebar, bg=bg_color, pady=20, padx=20)
             contact_frame.pack(fill=tk.X)
 
             # make all chat sessions clickable
@@ -112,12 +112,12 @@ class ChatWindow(tk.Tk):
             tk.Frame(self.sidebar, bg="#999999", height=1).pack(fill=tk.X)
 
     def _build_main_area(self):
-        self.header_frame = tk.Frame(self.main_area, bg=C_HEADER_BG, pady=10, padx=15)
+        self.header_frame = tk.Frame(self.main_area, bg=C_HEADER_BG, pady=15, padx=15)
         self.header_frame.pack(fill=tk.X)
 
         self.chat_title = tk.Label(
             self.header_frame,
-            text="Select or Create a room to start messaging",
+            text="Join or create a room to start messaging!",
             font=("Segoe UI", 12, "bold"),
             bg=C_HEADER_BG,
             fg=C_TEXT_FG,
@@ -136,12 +136,12 @@ class ChatWindow(tk.Tk):
         self.suggestion_frame = tk.Frame(self.main_area, bg=C_MAIN_BG)
         self.suggestion_frame.pack(anchor="w", padx=20)
 
-        input_container = tk.Frame(self.main_area, bg=C_INPUT_BG, pady=10, padx=15)
+        input_container = tk.Frame(self.main_area, bg=C_INPUT_BG, pady=15, padx=15)
         input_container.pack(fill=tk.X, side=tk.BOTTOM)
 
         self.entry = tk.Entry(input_container, font=("Segoe UI", 12), relief=tk.FLAT)
         self.entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
-                        padx=(0, 15), ipady=8)
+                        padx=(0, 15), ipady=10)
 
         self.entry.bind("<KeyRelease>", self._on_type)
         self.entry.bind("<Return>", lambda event: self._on_send())
@@ -261,7 +261,7 @@ class ChatWindow(tk.Tk):
         tk.Label( # create chat bubble
             row_frame, text=text, bg=bubble_bg, fg=C_TEXT_FG,
             font=("Segoe UI", 10), wraplength=350,
-            justify=tk.LEFT, padx=12, pady=10
+            justify=tk.LEFT, padx=15, pady=10
         ).pack(anchor=anchor)
 
     def _on_send(self):
