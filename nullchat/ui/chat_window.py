@@ -1,4 +1,5 @@
 import tkinter as tk
+import secrets
 from tkinter import messagebox
 
 from nullchat.protocol.room_manager import create_room, join_room
@@ -42,7 +43,7 @@ class ChatWindow(tk.Tk):
 
     def _build_sidebar(self):
         for widget in self.sidebar.winfo_children():
-            widget.destroy()
+            widget.destroy() # clear sidebar
 
         header_frame = tk.Frame(self.sidebar, bg=C_SIDEBAR_BG, pady=10, padx=10)
         header_frame.pack(fill=tk.X)
@@ -56,19 +57,17 @@ class ChatWindow(tk.Tk):
         btn_frame = tk.Frame(header_frame, bg=C_SIDEBAR_BG)
         btn_frame.pack(fill=tk.X)
 
-        tk.Button(
+        tk.Button( # create room button
             btn_frame, text="✨ Create Room", font=("Segoe UI", 9, "bold"),
             bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=6, pady=2,
             command=self._create_room
         ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
 
-        tk.Button(
+        tk.Button( # join room button
             btn_frame, text="🔗 Join Room", font=("Segoe UI", 9, "bold"),
             bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=6, pady=2,
             command=self._join_room
         ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
-
-        tk.Frame(self.sidebar, bg="#999999", height=1).pack(fill=tk.X)
 
         active_rooms = (
             self.registry.get_all_rooms()
@@ -84,7 +83,7 @@ class ChatWindow(tk.Tk):
                      bg=C_SIDEBAR_BG, pady=20).pack()
 
         for room_id in active_rooms:
-            is_selected = (room_id == self.current_room_id)
+            is_selected = (room_id == self.current_room_id) # highlight the selected room
             bg_color = C_SIDEBAR_SELECTED if is_selected else C_SIDEBAR_BG
 
             contact_frame = tk.Frame(self.sidebar, bg=bg_color, pady=20, padx=20)
@@ -96,20 +95,18 @@ class ChatWindow(tk.Tk):
 
             contact_frame.bind("<Button-1>", make_callback(room_id))
 
-            display_name = f"Room {room_id[:4]}...{room_id[-4:]}"
+            display_name = f"Room ID: {room_id}"
 
             icon = tk.Label(contact_frame, text="💬", font=("Segoe UI", 16),
                             bg=bg_color, fg=C_TEXT_FG)
             icon.pack(side=tk.LEFT, padx=(0, 10))
             icon.bind("<Button-1>", make_callback(room_id))
 
-            name = tk.Label(contact_frame, text=display_name,
+            name = tk.Label(contact_frame, text=display_name, # room name label
                             font=("Segoe UI", 11, "bold"),
                             bg=bg_color, fg=C_TEXT_FG)
             name.pack(side=tk.LEFT)
             name.bind("<Button-1>", make_callback(room_id))
-
-            tk.Frame(self.sidebar, bg="#999999", height=1).pack(fill=tk.X)
 
     def _build_main_area(self):
         self.header_frame = tk.Frame(self.main_area, bg=C_HEADER_BG, pady=15, padx=15)
@@ -123,8 +120,6 @@ class ChatWindow(tk.Tk):
             fg=C_TEXT_FG,
         )
         self.chat_title.pack(side=tk.LEFT)
-
-        tk.Frame(self.main_area, bg="#999999", height=1).pack(fill=tk.X)
 
         self.chat_canvas = tk.Canvas(self.main_area, bg=C_MAIN_BG, highlightthickness=0)
         self.chat_canvas.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
@@ -143,21 +138,18 @@ class ChatWindow(tk.Tk):
         self.entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
                         padx=(0, 15), ipady=10)
 
-        self.entry.bind("<KeyRelease>", self._on_type)
-        self.entry.bind("<Return>", lambda event: self._on_send())
-        self.entry.bind("<Tab>", self._on_tab)
+        self.entry.bind("<KeyRelease>", self._on_type) # for autocomplete suggestions
+        self.entry.bind("<Return>", lambda event: self._on_send()) # to send the message
+        self.entry.bind("<Tab>", self._on_tab) # accept autocomplete suggestion
 
-        tk.Button(
+        tk.Button( # send button
             input_container, text="➤", font=("Segoe UI", 14),
             bg="#000000", fg="#FFFFFF", relief=tk.FLAT,
             padx=15, pady=2, command=self._on_send
         ).pack(side=tk.RIGHT)
 
     def _create_room(self):
-        import secrets
-
-        # generates a chat key for the user
-        chat_key = secrets.token_hex(32)
+        chat_key = secrets.token_hex(32) # generates a chat key for the user, 32 bytes, 64 hex
 
         peer_public_key = self.my_peer_id
 
@@ -167,12 +159,12 @@ class ChatWindow(tk.Tk):
         self.registry.add_room(room_id) 
         self.registry.map_chat_key(chat_key, room_id)
 
-        popup = tk.Toplevel(self)
+        popup = tk.Toplevel(self) # popup window
         popup.title("Encrypted Chat Created")
         popup.geometry("450x180")
         popup.configure(bg=C_MAIN_BG)
         popup.transient(self)
-        popup.grab_set()
+        popup.grab_set() # freezes
 
         tk.Label(
             popup,
@@ -206,17 +198,17 @@ class ChatWindow(tk.Tk):
         self._select_room(room_id)
 
     def _join_room(self):
-        dialog = tk.Toplevel(self)
+        dialog = tk.Toplevel(self) # popup window
         dialog.title("Join Encrypted Chat")
         dialog.geometry("400x200") 
-        dialog.transient(self)  
+        dialog.transient(self) # stay at the top level
 
         tk.Label(dialog, text="Enter the chat key:", pady=20).pack()
         
         # textbox entry
         entry = tk.Entry(dialog, width=50)
         entry.pack(pady=10, padx=20)
-        entry.focus_set()
+        entry.focus_set() # for UX, cursor is in the entry box
 
         def on_submit():
             chat_key = entry.get()
@@ -243,9 +235,13 @@ class ChatWindow(tk.Tk):
 
     def _select_room(self, room_id):
         self.current_room_id = room_id
-        self.chat_title.config(text=f"Room: {room_id[:8]}...{room_id[-8:]}")
+        self.chat_title.config(text=f"Room ID: {room_id}")
         self._build_sidebar()
         self._refresh_messages()
+
+    def _refresh_messages(self): # clears chat upon clicking on a new chatroom
+        for widget in self.chat_frame.winfo_children():
+            widget.destroy()
 
     def _add_message(self, sender, text, incoming=True): # helper for _on_send
         row_frame = tk.Frame(self.chat_frame, bg=C_MAIN_BG)
