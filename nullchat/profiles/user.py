@@ -42,6 +42,8 @@ def wrap_room_key(master_key: bytes, room_key: bytes) -> str:
 
 def unwrap_room_key(master_key: bytes, wrapped: str) -> bytes:
     raw = bytes.fromhex(wrapped)
+    if len(raw) < 28:
+        raise ValueError("Wrapped room key is too short to be valid.")
     nonce, ciphertext = raw[:12], raw[12:]
     return AESGCM(master_key).decrypt(nonce, ciphertext, None)
 
