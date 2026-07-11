@@ -50,8 +50,8 @@ class ChatStore:
                     data = json.loads(body)
                 except (json.JSONDecodeError, KeyError):
                     continue  # in case of one bad line
-                except Exception as exc:
-                    raise ChatStoreError(f"could not unlock room {room_id!r}") from exc
+               except Exception:
+                    continue # skip corrupted lines
                 events.append(PlaintextEvent(
                     room_id=room_id,
                     sender_id=data["sender_id"],
