@@ -98,8 +98,8 @@ if __name__ == "__main__":
         else:
             # unlock existing user
             profile, master_key = store.unlock("your-passphrase-here")
-        app = ChatWindow(consumer, engine, bus, my_peer_id, registry, chat_store, 
-    profile, master_key, store) # launch UI
+        app = ChatWindow(consumer, engine, bus, my_peer_id, registry, chat_store,
+        profile, master_key, store, vocab_counts=counts) # launch UI
         app.mainloop()
 
     finally:

@@ -9,6 +9,7 @@ from nullchat.profiles.user import wrap_room_key
 from nullchat.protocol.consumer import PlaintextEvent
 from nullchat.protocol.room_manager import create_room, join_room
 from nullchat.protocol.messages import build_message, build_join_message
+from nullchat.ui.settings_window import SettingsWindow
 
 C_SIDEBAR_BG = "#3A3A3A"
 C_SIDEBAR_SELECTED = "#4A4A4A"
@@ -20,7 +21,8 @@ C_BUBBLE_OUT = "#0A84FF"
 C_TEXT_FG = "#FFFFFF"
 
 class ChatWindow(tk.Tk):
-    def __init__(self, consumer, engine, bus, my_peer_id, registry, chat_store, user_profile, master_key, user_store):
+    def __init__(self, consumer, engine, bus, my_peer_id, registry, chat_store,
+                 user_profile, master_key, user_store, vocab_counts=None):
         super().__init__()
         self.title("NullChat")
         self.geometry("850x550")
@@ -39,6 +41,9 @@ class ChatWindow(tk.Tk):
         self.current_room_id = None
         self.chat_store = chat_store
 
+        self.vocab_counts = vocab_counts or {}
+        self.engine_backend = "trie"
+
         self.sidebar = tk.Frame(self, bg=C_SIDEBAR_BG, width=240)
         self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
         self.sidebar.pack_propagate(False)
@@ -49,7 +54,12 @@ class ChatWindow(tk.Tk):
         self._build_sidebar()
         self._build_main_area()
 
+
         self.after(100, self._poll_backend)
+
+    def _set_engine(self, engine, backend):
+        self.engine = engine
+        self.engine_backend = backend
 
     def _build_sidebar(self):
         for widget in self.sidebar.winfo_children():
@@ -76,15 +86,22 @@ class ChatWindow(tk.Tk):
 
         tk.Button( # create room button
             btn_frame, text="✨ Create Room", font=("Segoe UI", 9, "bold"),
-            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=6, pady=2,
+            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=1, pady=2,
             command=self._create_room
         ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 2))
+
+        tk.Button(  # settings button
+            btn_frame, text="⚙️", font=("Segoe UI", 9, "bold"),
+            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=1, pady=2,
+            command=lambda: SettingsWindow(self, self.vocab_counts,
+                                           self.engine_backend, self._set_engine)
+        ).pack(side=tk.LEFT, padx=(1, 0))
 
         tk.Button( # join room button
             btn_frame, text="🔗 Join Room", font=("Segoe UI", 9, "bold"),
             bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=6, pady=2,
             command=self._join_room
-        ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
+        ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(1, 0))
 
         active_rooms = [ref.room_id for ref in self.user_profile.rooms]
 
@@ -446,12 +463,14 @@ class ChatWindow(tk.Tk):
         if not words[-1]:
             return
 
+        t0 = time.perf_counter()
         suggestions = self.engine.suggest(words[-1])
+        elapsed_ms = (time.perf_counter() - t0) * 1000
 
         if suggestions:
             tk.Label(
                 self.suggestion_frame,
-                text="Suggestions:",
+                text=f"Suggestions ({self.engine_backend}, {elapsed_ms:.2f}ms):",
                 bg=C_MAIN_BG,
                 fg="#888888",
                 font=("Segoe UI", 10),
