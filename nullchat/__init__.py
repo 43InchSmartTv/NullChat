@@ -67,11 +67,11 @@ if __name__ == "__main__":
     try:
         # live network
         bus = AxlBusAdapter(manager.bridge)
-        consumer = MessageConsumer(bus)
-        consumer.start()
         registry = RoomRegistry()
-
         registry.load_keys()
+
+        consumer = MessageConsumer(bus, registry=registry)
+        consumer.start()
 
         # Restore crypto keys
         for chat_key, room_id in registry._key_to_room.items():
