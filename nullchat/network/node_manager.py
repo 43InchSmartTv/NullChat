@@ -1,5 +1,5 @@
-
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -7,11 +7,12 @@ from pathlib import Path
 from nullchat.network.axl_bridge import AxlBridge, BridgeConfig, BridgeUnreachable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+NODE_BINARY_NAME = "node.exe" if sys.platform == "win32" else "node"
 
 
 @dataclass
 class NodeManagerConfig:
-    node_binary: Path = field(default_factory=lambda: PROJECT_ROOT / "axl" / "node")
+    node_binary: Path = field(default_factory=lambda: PROJECT_ROOT / "axl" / NODE_BINARY_NAME)
     config_path: Path = field(default_factory=lambda: PROJECT_ROOT / "axl" / "node-config.json")
     bridge: BridgeConfig = field(default_factory=BridgeConfig)
     startup_timeout_secs: float = 30.0
