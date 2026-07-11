@@ -30,6 +30,7 @@ class MessageConsumer:
         self._out: queue.Queue[PlaintextEvent] = queue.Queue(maxsize=out_queue_size)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._seen: set[tuple[str, float]] = set()  # (sender_id, timestamp) to prevent relay loops
 
     def register_room(self, room_id: str, crypto: RoomCrypto) -> None:
         with self._room_keys_lock:
@@ -94,9 +95,22 @@ class MessageConsumer:
         except Exception:
             return  
 
+        msg_key = (msg.sender_id, msg.timestamp)
+        if msg_key in self._seen:
+            return
+        self._seen.add(msg_key)
+        
         # auto add anyone who can encrypt for this room
         if self._registry is not None:
             self._registry.add_member(msg.room_id, msg.sender_id)
+            
+            # relay to other members who might not know this sender
+            for peer_id in self._registry.members_of(msg.room_id):
+                if peer_id.lower() != msg.sender_id.lower():
+                    try:
+                        self._bus.send(peer_id, inbound.payload)
+                    except Exception:
+                        pass
 
         if msg.msg_type == MSG_TYPE_JOIN:
             return
