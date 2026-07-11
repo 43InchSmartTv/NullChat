@@ -8,7 +8,7 @@ from nullchat.crypto.room import RoomCrypto, derive_room_key
 from nullchat.profiles.user import wrap_room_key
 from nullchat.protocol.consumer import PlaintextEvent
 from nullchat.protocol.room_manager import create_room, join_room
-from nullchat.protocol.messages import build_message
+from nullchat.protocol.messages import build_message, build_join_message
 
 C_SIDEBAR_BG = "#3A3A3A"
 C_SIDEBAR_SELECTED = "#4A4A4A"
@@ -212,26 +212,28 @@ class ChatWindow(tk.Tk):
         popup.transient(self)
         popup.grab_set() # freezes
 
+        invite_token = f"{chat_key}:{room_id}:{self.my_peer_id}"
+
         tk.Label(
             popup,
-            text="Share this chat key:",
+            text="Share this invite token:",
             bg=C_MAIN_BG,
             font=("Segoe UI", 12, "bold")
         ).pack(pady=(20, 5))
 
         key_entry = tk.Entry(popup, font=("Consolas", 10), justify="center")
-        key_entry.insert(0, chat_key)
+        key_entry.insert(0, invite_token)
         key_entry.config(state="readonly")
         key_entry.pack(fill=tk.X, padx=20, pady=5, ipady=5)
 
         def copy_key():
             self.clipboard_clear()
-            self.clipboard_append(chat_key)
+            self.clipboard_append(invite_token)
             copy_btn.config(text="Copied!")
-            popup.after(1500, lambda: copy_btn.config(text="Copy Chat Key"))
+            popup.after(1500, lambda: copy_btn.config(text="Copy Invite Token"))
 
         copy_btn = tk.Button(
-            popup, text="Copy Chat Key", bg="#0066CC", fg="#FFFFFF",
+            popup, text="Copy Invite Token", bg="#0066CC", fg="#FFFFFF",
             relief=tk.FLAT, padx=15, pady=5, command=copy_key
         )
         copy_btn.pack(pady=10)
@@ -249,7 +251,7 @@ class ChatWindow(tk.Tk):
         dialog.geometry("400x200") 
         dialog.transient(self) # stay at the top level
 
-        tk.Label(dialog, text="Enter the chat key:", pady=20).pack()
+        tk.Label(dialog, text="Enter the invite token:", pady=20).pack()
 
         # textbox entry
         entry = tk.Entry(dialog, width=50)
@@ -257,18 +259,21 @@ class ChatWindow(tk.Tk):
         entry.focus_set() # for UX, cursor is in the entry box
 
         def on_submit():
-            chat_key = entry.get()
+            token = entry.get().strip()
             dialog.destroy()
             
-            if not chat_key:
+            if not token:
                 return
 
-            peer_public_key = self.my_peer_id
-            room_id = self.registry.lookup_room_id(chat_key)
-            
-            if not room_id:
-                messagebox.showerror("Error", "No room found for that chat key.")
+            parts = token.split(":")
+            if len(parts) != 3:
+                messagebox.showerror("Error", "Invalid invite token format")
                 return
+            
+            chat_key, room_id, creator_peer_id = parts
+            peer_public_key = self.my_peer_id
+
+            self.registry.add_member(room_id, creator_peer_id)
             
             wrapped = wrap_room_key(self.master_key, chat_key.encode("utf-8"))
 
@@ -277,7 +282,11 @@ class ChatWindow(tk.Tk):
 
             crypto = join_room(room_id, chat_key, peer_public_key, self.registry)
             self.consumer.register_room(room_id, crypto)
-            self.registry.add_room(room_id) 
+            self.registry.add_room(room_id)
+            self.registry.map_chat_key(chat_key, room_id)
+
+            self._send_join_announcement(room_id, creator_peer_id, crypto)
+            
             self._select_room(room_id)
 
         tk.Button(dialog, text="Join", command=on_submit).pack(pady=10)
@@ -299,6 +308,14 @@ class ChatWindow(tk.Tk):
         self.delete_btn.pack(side=tk.RIGHT) 
         self._build_sidebar()
         self._refresh_messages()
+
+    def _send_join_announcement(self, room_id, creator_peer_id, crypto):
+        msg = build_join_message(crypto, room_id, self.my_peer_id)
+        try:
+            self.bus.send(creator_peer_id, msg.to_wire())
+            print(f"[join] sent join announcement to {creator_peer_id[:16]}")
+        except Exception as e:
+            print(f"[join] failed to send join announcement: {e}")
 
     def _refresh_messages(self): # when navigating between chatrooms
         for widget in self.chat_frame.winfo_children():
@@ -344,7 +361,11 @@ class ChatWindow(tk.Tk):
         try:
             crypto = self.consumer.get_crypto(self.current_room_id)
             msg = build_message(crypto, self.current_room_id, self.my_peer_id, text)
-            self.bus.send(self.my_peer_id, msg.to_wire())  # <-- send encrypted wire bytes, not raw text
+            wire_data = msg.to_wire()
+            
+            for peer_id in self.registry.members_of(self.current_room_id):
+                if peer_id != self.my_peer_id:
+                    self.bus.send(peer_id, wire_data)
 
             self.entry.delete(0, tk.END)
 
