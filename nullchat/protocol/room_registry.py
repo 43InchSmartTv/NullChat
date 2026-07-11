@@ -16,6 +16,14 @@ class RoomRegistry: # connects users to rooms
             self._room_to_peers[room_id].append(peer_public_key)
             self.save_keys()
 
+    def remove_member(self, room_id: str, peer_public_key: str) -> None:
+        if room_id in self._room_to_peers:
+            try:
+                self._room_to_peers[room_id].remove(peer_public_key)
+                self.save_keys()
+            except ValueError:
+                pass
+
     def members_of(self, room_id: str) -> list[str]:
         return list(self._room_to_peers.get(room_id, []))
 
