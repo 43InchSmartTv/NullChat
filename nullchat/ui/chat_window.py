@@ -349,6 +349,18 @@ class ChatWindow(tk.Tk):
         self.chat_canvas.update_idletasks()
         self.chat_canvas.yview_moveto(1.0)  # scrollable
 
+    def _add_system_message(self, text):
+        row_frame = tk.Frame(self.chat_frame, bg=C_MAIN_BG)
+        row_frame.pack(fill=tk.X, pady=5)
+
+        tk.Label(
+            row_frame, text=text, bg=C_MAIN_BG, fg="#888888",
+            font=("Segoe UI", 9, "italic")
+        ).pack(anchor="center")
+        
+        self.chat_canvas.update_idletasks()
+        self.chat_canvas.yview_moveto(1.0)
+
     def _on_send(self):
         if not self.current_room_id: # is user in a room
             messagebox.showwarning("No Room", "Please create or join a room first!")
@@ -363,9 +375,18 @@ class ChatWindow(tk.Tk):
             msg = build_message(crypto, self.current_room_id, self.my_peer_id, text)
             wire_data = msg.to_wire()
             
+            disconnected = []
             for peer_id in self.registry.members_of(self.current_room_id):
                 if peer_id != self.my_peer_id:
-                    self.bus.send(peer_id, wire_data)
+                    try:
+                        self.bus.send(peer_id, wire_data)
+                    except Exception:
+                        disconnected.append(peer_id)
+            
+            for peer_id in disconnected:
+                self.registry.remove_member(self.current_room_id, peer_id)
+                short_id = peer_id[:8]
+                self._add_system_message(f"User {short_id} disconnected")
 
             self.entry.delete(0, tk.END)
 
