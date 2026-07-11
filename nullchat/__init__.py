@@ -21,15 +21,10 @@ class AxlBusAdapter:
         self.bridge = bridge
 
     def send(self, peer_id, payload): # transmit data
-        print(f"[live send] to {peer_id}...")
         if isinstance(payload, str):
             payload = payload.encode('utf-8')
         
-        try:
-            self.bridge.send_to_peer(peer_id, payload)
-            print("Message accepted.")
-        except Exception as e:
-            print(f"Failed: {e}")
+        self.bridge.send_to_peer(peer_id, payload)
 
     def recv(self, timeout=None):
         start_time = time.monotonic()
