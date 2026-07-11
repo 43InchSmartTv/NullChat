@@ -35,7 +35,7 @@ class AutocompleteEngine:
             raise ValueError(f"unknown backend: {backend!r}")
         engine = cls(structure, limit=limit)
         for word, count in counts.items():
-            structure.insert(word, count)
+            structure.insert(word.lower(), count)
         return engine
 
     def suggest(self, draft: str) -> list[str]:
@@ -43,6 +43,4 @@ class AutocompleteEngine:
         if not draft or draft[-1].isspace():
             return []
         prefix = draft.split()[-1].lower()
-        if not prefix.isalpha():
-            return []
         return [word for word, _ in self._structure.suggest(prefix, self._limit)]
