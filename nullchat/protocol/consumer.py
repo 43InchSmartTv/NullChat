@@ -79,12 +79,6 @@ class MessageConsumer:
         except Exception:
             return
 
-        # axl derives peer ID from IPv6, which only recovers ~26 chars of the key
-        msg_prefix = msg.sender_id.lower()[:26]
-        hdr_prefix = inbound.sender_peer_id.lower()[:26]
-        if msg_prefix != hdr_prefix:
-            return
-
         with self._room_keys_lock:
             crypto = self._room_keys.get(msg.room_id) # get the encryption keys
         if crypto is None:
@@ -95,6 +89,7 @@ class MessageConsumer:
         except Exception:
             return  
 
+        # dedupe to prevent relay loops
         msg_key = (msg.sender_id, msg.timestamp)
         if msg_key in self._seen:
             return
