@@ -91,18 +91,18 @@ if __name__ == "__main__":
     else:
         dummy_peer_profile, _ = dummy_peer_store.unlock("dummy-passphrase")
 
+    registry = RoomRegistry()
+    registry.load_keys()
+
     consumer_holder = {}
     bus = DummyBusAdapter(
         get_crypto=lambda room_id: consumer_holder["consumer"].get_crypto(room_id),
         responder_name=dummy_peer_profile.display_name,
     )
 
-    consumer = MessageConsumer(bus)
+    consumer = MessageConsumer(bus, registry=registry)
     consumer_holder["consumer"] = consumer
     consumer.start()
-
-    registry = RoomRegistry()
-    registry.load_keys()
 
     # restore crypto keys
     for chat_key, room_id in registry._key_to_room.items():
