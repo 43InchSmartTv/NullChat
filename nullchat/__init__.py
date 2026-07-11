@@ -1,4 +1,3 @@
-
 import sys
 import time
 from pathlib import Path
@@ -14,6 +13,8 @@ from nullchat.autocomplete.ngrams import load_counts_table
 from nullchat.network.node_manager import NodeManager
 from nullchat.storage.chat_store import ChatStore
 from nullchat.network.axl_bridge import InboundMessage
+from nullchat.network.node_manager import NodeManagerConfig
+from nullchat.storage.user_store import UserStore
 
 class AxlBusAdapter:
     def __init__(self, bridge):
@@ -36,7 +37,6 @@ class AxlBusAdapter:
             try:
                 raw = self.bridge.poll_inbound()
                 if raw is not None:
-                    # raw is already an InboundMessage from AxlBridge
                     return InboundMessage(
                         sender_peer_id=raw.sender_peer_id,
                         payload=raw.payload
@@ -55,7 +55,6 @@ if __name__ == "__main__":
     root_dir = Path(__file__).parent.parent
 
     # start the AXL node process
-    from nullchat.network.node_manager import NodeManagerConfig
     config = NodeManagerConfig(node_binary=root_dir / "axl" / "node.exe")
     manager = NodeManager(config)
     
@@ -92,7 +91,20 @@ if __name__ == "__main__":
         counts = load_counts_table(vocab_path) # load vocabulary
         engine = AutocompleteEngine.from_counts(counts)
         chat_store = ChatStore()
-        app = ChatWindow(consumer, engine, bus, my_peer_id, registry, chat_store) # launch UI
+
+        # profiles
+        store = UserStore()
+        if not store.exists: # user nicknames
+            profile, master_key = store.create_user(
+                user_id=my_peer_id,
+                display_name="Me",
+                passphrase="your-passphrase-here"
+            )
+        else:
+            # unlock existing user
+            profile, master_key = store.unlock("your-passphrase-here")
+        app = ChatWindow(consumer, engine, bus, my_peer_id, registry, chat_store, 
+    profile, master_key, store) # launch UI
         app.mainloop()
 
     finally:

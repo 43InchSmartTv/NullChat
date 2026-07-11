@@ -10,14 +10,14 @@ from nullchat.protocol.consumer import PlaintextEvent
 from nullchat.protocol.room_manager import create_room, join_room
 from nullchat.protocol.messages import build_message
 
-C_SIDEBAR_BG = "#B8B8B8"
-C_SIDEBAR_SELECTED = "#909090"
-C_HEADER_BG = "#C0C0C0"
-C_MAIN_BG = "#FFFFFF"
-C_INPUT_BG = "#B8B8B8"
-C_BUBBLE_IN = "#E0E0E0"
-C_BUBBLE_OUT = "#999999"
-C_TEXT_FG = "#000000"
+C_SIDEBAR_BG = "#3A3A3A"
+C_SIDEBAR_SELECTED = "#4A4A4A"
+C_HEADER_BG = "#3A3A3A"
+C_MAIN_BG = "#2C2C2C"
+C_INPUT_BG = "#3A3A3A"
+C_BUBBLE_IN = "#3C3C3C"
+C_BUBBLE_OUT = "#0A84FF"
+C_TEXT_FG = "#FFFFFF"
 
 class ChatWindow(tk.Tk):
     def __init__(self, consumer, engine, bus, my_peer_id, registry, chat_store, user_profile, master_key, user_store):
