@@ -50,7 +50,7 @@ if __name__ == "__main__":
     root_dir = Path(__file__).parent.parent
 
     # start the AXL node process
-    config = NodeManagerConfig(node_binary=root_dir / "axl" / "node")
+    config = NodeManagerConfig()
     manager = NodeManager(config)
     
     try:
