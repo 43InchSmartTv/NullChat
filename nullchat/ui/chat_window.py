@@ -277,7 +277,7 @@ class ChatWindow(tk.Tk):
             
             wrapped = wrap_room_key(self.master_key, chat_key.encode("utf-8"))
 
-            self.user_profile.add_room(room_id, wrapped_key=wrapped)
+            self.user_profile.add_room(room_id, display_name=f"Room {room_id[:8]}", wrapped_key=wrapped)
             self.user_store.save_profile(self.user_profile)
 
             crypto = join_room(room_id, chat_key, peer_public_key, self.registry)
