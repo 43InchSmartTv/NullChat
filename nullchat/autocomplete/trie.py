@@ -49,10 +49,12 @@ class Trie:
         return node.frequency if node is not None and node.is_word else 0
 
     def starts_with(self, prefix: str) -> bool:
-        return self._walk(prefix) is not None
+        return not prefix or self._walk(prefix) is not None
 
     def suggest(self, prefix: str, limit: int = 5) -> list[tuple[str, int]]:
         # most frequent first
+        if not prefix:
+            return[]
         start = self._walk(prefix)
         if start is None or limit <= 0:
             return []
