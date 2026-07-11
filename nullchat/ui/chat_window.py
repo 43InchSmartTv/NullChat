@@ -365,7 +365,7 @@ class ChatWindow(tk.Tk):
             print(f"Failed to send message: {e}")
 
     def _poll_backend(self):
-        events = self.consumer.poll_ui_events()
+        events = self.consumer.poll_ui_events() # pulls new chats
 
         for event in events:
             crypto = self.consumer.get_crypto(event.room_id)
