@@ -96,13 +96,11 @@ class ChatWindow(tk.Tk):
             def make_callback(rid):
                 return lambda e: self._select_room(rid)
 
-            # icon next
             icon = tk.Label(contact_frame, text="💬", font=("Segoe UI", 16),
                             bg=bg_color, fg=C_TEXT_FG)
             icon.pack(side=tk.LEFT, padx=(0, 10))
             icon.bind("<Button-1>", make_callback(room_id))
 
-            # name last, expands into whatever cavity remains
             name = tk.Label(contact_frame, text=f"Room ID: {room_id}",
                             font=("Segoe UI", 11, "bold"),
                             bg=bg_color, fg=C_TEXT_FG)
@@ -113,13 +111,19 @@ class ChatWindow(tk.Tk):
         self.header_frame = tk.Frame(self.main_area, bg=C_HEADER_BG, pady=15, padx=15)
         self.header_frame.pack(fill=tk.X)
 
+        def _on_delete_current_room(): # delete button confirmation screen
+            if not self.current_room_id:
+                return
+            if messagebox.askyesno("Delete Room", f"Delete room {self.current_room_id}?"):
+                self._delete_room(self.current_room_id) 
+
         # delete button
         self.delete_btn = tk.Button(
             self.header_frame, text="🗑️ Delete", font=("Segoe UI", 9, "bold"),
             bg="#AA0000", fg="#FFFFFF", relief=tk.FLAT, padx=8, pady=4,
-            command=self._on_delete_current_room
+            command=_on_delete_current_room
         )
-
+        
         self.chat_title = tk.Label(
             self.header_frame,
             text="Join or create a room to start messaging!",
@@ -146,22 +150,16 @@ class ChatWindow(tk.Tk):
         self.entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
                         padx=(0, 15), ipady=10)
 
-        self.entry.bind("<KeyRelease>", self._on_type)
-        self.entry.bind("<Return>", lambda event: self._on_send())
-        self.entry.bind("<Tab>", self._on_tab)
+        self.entry.bind("<KeyRelease>", self._on_type) # autocomplete suggestions
+        self.entry.bind("<Return>", lambda event: self._on_send()) # send message
+        self.entry.bind("<Tab>", self._on_tab) # accept autocomplete suggestion
 
         tk.Button(
             input_container, text="➤", font=("Segoe UI", 14),
             bg="#000000", fg="#FFFFFF", relief=tk.FLAT,
             padx=15, pady=2, command=self._on_send
         ).pack(side=tk.RIGHT)
-    
-    def _on_delete_current_room(self):
-        if not self.current_room_id:
-            return
-        if messagebox.askyesno("Delete Room", f"Delete room {self.current_room_id}?"):
-            self._delete_room(self.current_room_id)    
-    
+     
     def _create_room(self):
         chat_key = secrets.token_hex(32) # generates a chat key for the user, 32 bytes, 64 hex
 
@@ -261,7 +259,6 @@ class ChatWindow(tk.Tk):
         crypto = self.consumer.get_crypto(self.current_room_id)
         history = self.chat_store.load_history(crypto, self.current_room_id) 
 
-        # Render each message
         for event in history:
             incoming = (event.sender_id != self.my_peer_id)
             self._add_message(event.sender_id, event.text, incoming=incoming)
@@ -367,7 +364,7 @@ class ChatWindow(tk.Tk):
                 font=("Segoe UI", 10),
             ).pack(side=tk.LEFT)
 
-            for word in suggestions[:3]:
+            for word in suggestions[:3]: # clickable suggestions
                 lbl = tk.Label(
                     self.suggestion_frame,
                     text=word,
