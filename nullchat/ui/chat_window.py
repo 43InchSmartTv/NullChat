@@ -4,9 +4,11 @@ import secrets
 from pathlib import Path
 from tkinter import messagebox
 
-
+from nullchat.crypto.room import RoomCrypto, derive_room_key
+from nullchat.profiles.user import wrap_room_key
 from nullchat.protocol.consumer import PlaintextEvent
 from nullchat.protocol.room_manager import create_room, join_room
+from nullchat.protocol.messages import build_message
 
 C_SIDEBAR_BG = "#B8B8B8"
 C_SIDEBAR_SELECTED = "#909090"
@@ -18,7 +20,7 @@ C_BUBBLE_OUT = "#999999"
 C_TEXT_FG = "#000000"
 
 class ChatWindow(tk.Tk):
-    def __init__(self, consumer, engine, bus, my_peer_id, registry, chat_store):
+    def __init__(self, consumer, engine, bus, my_peer_id, registry, chat_store, user_profile, master_key, user_store):
         super().__init__()
         self.title("NullChat")
         self.geometry("850x550")
@@ -29,6 +31,10 @@ class ChatWindow(tk.Tk):
         self.bus = bus
         self.my_peer_id = my_peer_id
         self.registry = registry
+
+        self.user_profile = user_profile
+        self.master_key = master_key
+        self.user_store = user_store
 
         self.current_room_id = None
         self.chat_store = chat_store
@@ -57,6 +63,13 @@ class ChatWindow(tk.Tk):
         tk.Label(title_frame, text="💬 NullChat", font=("Segoe UI", 16, "bold"),
                  bg=C_SIDEBAR_BG, fg=C_TEXT_FG).pack(side=tk.LEFT)
 
+        # add nickname button
+        tk.Button(
+            title_frame, text="👤 Profile", font=("Segoe UI", 9, "bold"),
+            bg="#333333", fg="#FFFFFF", relief=tk.FLAT, padx=6, pady=2,
+            command=self._edit_profile
+        ).pack(side=tk.RIGHT)
+
         # create/join buttons
         btn_frame = tk.Frame(header_frame, bg=C_SIDEBAR_BG)
         btn_frame.pack(fill=tk.X)
@@ -73,11 +86,8 @@ class ChatWindow(tk.Tk):
             command=self._join_room
         ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(2, 0))
 
-        active_rooms = (
-            self.registry.get_all_rooms()
-            if hasattr(self.registry, "get_all_rooms")
-            else []
-        )
+        active_rooms = [ref.room_id for ref in self.user_profile.rooms]
+
 
         if self.current_room_id and self.current_room_id not in active_rooms:
             active_rooms.insert(0, self.current_room_id)
@@ -100,8 +110,9 @@ class ChatWindow(tk.Tk):
                             bg=bg_color, fg=C_TEXT_FG)
             icon.pack(side=tk.LEFT, padx=(0, 10))
             icon.bind("<Button-1>", make_callback(room_id))
-
-            name = tk.Label(contact_frame, text=f"Room ID: {room_id}",
+            
+            ref = self.user_profile.get_room(room_id)
+            name = tk.Label(contact_frame, text=f"{ref.display_name}",
                             font=("Segoe UI", 11, "bold"),
                             bg=bg_color, fg=C_TEXT_FG)
             name.pack(side=tk.LEFT, expand=True, fill=tk.X)
@@ -133,12 +144,32 @@ class ChatWindow(tk.Tk):
         )
         self.chat_title.pack(side=tk.LEFT)
 
-        self.chat_canvas = tk.Canvas(self.main_area, bg=C_MAIN_BG, highlightthickness=0)
-        self.chat_canvas.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        chat_container = tk.Frame(self.main_area, bg=C_MAIN_BG)
+        chat_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+        self.chat_canvas = tk.Canvas(chat_container, bg=C_MAIN_BG, highlightthickness=0)
+        self.chat_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar = tk.Scrollbar(chat_container, orient=tk.VERTICAL, command=self.chat_canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.chat_canvas.configure(yscrollcommand=scrollbar.set)
 
         self.chat_frame = tk.Frame(self.chat_canvas, bg=C_MAIN_BG)
         self.chat_canvas.create_window((0, 0), window=self.chat_frame,
                                     anchor="nw", width=540)
+
+        def _on_frame_configure(event):
+            self.chat_canvas.configure(scrollregion=self.chat_canvas.bbox("all"))
+        self.chat_frame.bind("<Configure>", _on_frame_configure)
+
+        def _on_mousewheel(event):
+            first, last = self.chat_canvas.yview()
+            if first <= 0.0 and last >= 1.0:
+                return  # entire content already fits in view -- nothing to scroll
+            self.chat_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        self.chat_canvas.bind("<Enter>", lambda e: self.chat_canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        self.chat_canvas.bind("<Leave>", lambda e: self.chat_canvas.unbind_all("<MouseWheel>"))
 
         self.suggestion_frame = tk.Frame(self.main_area, bg=C_MAIN_BG)
         self.suggestion_frame.pack(anchor="w", padx=20)
@@ -162,11 +193,14 @@ class ChatWindow(tk.Tk):
      
     def _create_room(self):
         chat_key = secrets.token_hex(32) # generates a chat key for the user, 32 bytes, 64 hex
-
         peer_public_key = self.my_peer_id
 
         room_id, crypto = create_room(chat_key, peer_public_key, self.registry) # room_id for the backend verification
         self.consumer.register_room(room_id, crypto)
+        
+        wrapped = wrap_room_key(self.master_key, chat_key.encode("utf-8"))
+        self.user_profile.add_room(room_id, display_name=f"Room {room_id[:8]}", wrapped_key=wrapped)
+        self.user_store.save_profile(self.user_profile)
 
         self.registry.add_room(room_id) 
         self.registry.map_chat_key(chat_key, room_id)
@@ -216,7 +250,7 @@ class ChatWindow(tk.Tk):
         dialog.transient(self) # stay at the top level
 
         tk.Label(dialog, text="Enter the chat key:", pady=20).pack()
-        
+
         # textbox entry
         entry = tk.Entry(dialog, width=50)
         entry.pack(pady=10, padx=20)
@@ -235,6 +269,11 @@ class ChatWindow(tk.Tk):
             if not room_id:
                 messagebox.showerror("Error", "No room found for that chat key.")
                 return
+            
+            wrapped = wrap_room_key(self.master_key, chat_key.encode("utf-8"))
+
+            self.user_profile.add_room(room_id, wrapped_key=wrapped)
+            self.user_store.save_profile(self.user_profile)
 
             crypto = join_room(room_id, chat_key, peer_public_key, self.registry)
             self.consumer.register_room(room_id, crypto)
@@ -246,8 +285,17 @@ class ChatWindow(tk.Tk):
         self.wait_window(dialog)
 
     def _select_room(self, room_id):
+        room_key = self.user_profile.room_key(room_id, self.master_key)
+        if room_key is None:
+            messagebox.showerror("Error", "No key stored for this room.")
+            return
+
+        crypto = RoomCrypto(derive_room_key(room_key, room_id))
+        self.consumer.register_room(room_id, crypto)
+
         self.current_room_id = room_id
-        self.chat_title.config(text=f"Room ID: {room_id}")
+        ref = self.user_profile.get_room(room_id)
+        self.chat_title.config(text=f"{ref.display_name}")
         self.delete_btn.pack(side=tk.RIGHT) 
         self._build_sidebar()
         self._refresh_messages()
@@ -262,6 +310,7 @@ class ChatWindow(tk.Tk):
         for event in history:
             incoming = (event.sender_id != self.my_peer_id)
             self._add_message(event.sender_id, event.text, incoming=incoming)
+        self.chat_canvas.yview_moveto(0.0)
 
     def _add_message(self, sender, text, incoming=True): # helper for _on_send
         row_frame = tk.Frame(self.chat_frame, bg=C_MAIN_BG)
@@ -279,6 +328,9 @@ class ChatWindow(tk.Tk):
             font=("Segoe UI", 10), wraplength=350,
             justify=tk.LEFT, padx=15, pady=10
         ).pack(anchor=anchor)
+        
+        self.chat_canvas.update_idletasks()
+        self.chat_canvas.yview_moveto(1.0)  # scrollable
 
     def _on_send(self):
         if not self.current_room_id: # is user in a room
@@ -290,15 +342,16 @@ class ChatWindow(tk.Tk):
             return
 
         try:
-            payload = text.encode("utf-8")
-            self.bus.send(self.my_peer_id, payload)
+            crypto = self.consumer.get_crypto(self.current_room_id)
+            msg = build_message(crypto, self.current_room_id, self.my_peer_id, text)
+            self.bus.send(self.my_peer_id, msg.to_wire())  # <-- send encrypted wire bytes, not raw text
 
-            self.entry.delete(0, tk.END) # delete in entry box
+            self.entry.delete(0, tk.END)
 
             for widget in self.suggestion_frame.winfo_children(): # clear autocomplete suggestions
                 widget.destroy()
 
-            self._add_message("Me", text, incoming=False) # create message
+            self._add_message(self.user_profile.display_name, text, incoming=False) 
 
             event = PlaintextEvent(
                 room_id=self.current_room_id,
@@ -306,8 +359,6 @@ class ChatWindow(tk.Tk):
                 timestamp=time.time(),  
                 text=text,
             )
-
-            crypto = self.consumer.get_crypto(self.current_room_id)
             self.chat_store.append(crypto, event)
 
         except Exception as e:
@@ -391,11 +442,46 @@ class ChatWindow(tk.Tk):
 
         for widget in self.suggestion_frame.winfo_children():
             widget.destroy() # clear suggestions
+   
+    def _edit_profile(self):
+            dialog = tk.Toplevel(self)
+            dialog.title("Edit Profile")
+            dialog.geometry("350x160")
+            dialog.transient(self)
+            dialog.grab_set()
+
+            tk.Label(dialog, text="Display name:", pady=15).pack()
+
+            entry = tk.Entry(dialog, width=30)
+            entry.insert(0, self.user_profile.display_name)
+            entry.pack(pady=5)
+            entry.focus_set()
+            entry.select_range(0, tk.END)
+
+            def on_save():
+                new_name = entry.get().strip()
+                if new_name:
+                    self.user_profile.display_name = new_name
+                    self.user_store.save_profile(self.user_profile)
+                    self.bus.my_display_name = new_name
+                    self._build_sidebar() 
+                dialog.destroy()
+
+            tk.Button(
+                dialog, text="Save", bg="#0066CC", fg="#FFFFFF",
+                relief=tk.FLAT, padx=20, pady=5, command=on_save
+            ).pack(pady=15)
+
+            self.wait_window(dialog)
 
     def _delete_room(self, room_id):
         # remove from registry
         if room_id in self.registry._rooms:
             self.registry._rooms.remove(room_id)
+
+        # remove profile
+        self.user_profile.remove_room(room_id)
+        self.user_store.save_profile(self.user_profile)
 
         # remove chat key mapping
         keys_to_delete = [k for k, r in self.registry._key_to_room.items() if r == room_id]
