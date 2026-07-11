@@ -7,7 +7,6 @@ from nullchat.network.axl_bridge import InboundMessage
 from nullchat.crypto.room import RoomCrypto
 from nullchat.protocol.messages import Message
 
-
 @dataclass
 class PlaintextEvent:
     room_id: str
@@ -54,6 +53,10 @@ class MessageConsumer:
             except queue.Empty:
                 break
         return events
+
+    def get_crypto(self, room_id: str) -> RoomCrypto | None:
+        with self._room_keys_lock:
+            return self._room_keys.get(room_id)
 
     def _consume_loop(self) -> None: # background loop
         while not self._stop_event.is_set():

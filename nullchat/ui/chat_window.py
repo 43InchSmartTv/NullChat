@@ -1,7 +1,11 @@
+import time
 import tkinter as tk
 import secrets
+from pathlib import Path
 from tkinter import messagebox
 
+
+from nullchat.protocol.consumer import PlaintextEvent
 from nullchat.protocol.room_manager import create_room, join_room
 
 C_SIDEBAR_BG = "#B8B8B8"
@@ -13,9 +17,8 @@ C_BUBBLE_IN = "#E0E0E0"
 C_BUBBLE_OUT = "#999999"
 C_TEXT_FG = "#000000"
 
-
 class ChatWindow(tk.Tk):
-    def __init__(self, consumer, engine, bus, my_peer_id, registry):
+    def __init__(self, consumer, engine, bus, my_peer_id, registry, chat_store):
         super().__init__()
         self.title("NullChat")
         self.geometry("850x550")
@@ -28,6 +31,7 @@ class ChatWindow(tk.Tk):
         self.registry = registry
 
         self.current_room_id = None
+        self.chat_store = chat_store
 
         self.sidebar = tk.Frame(self, bg=C_SIDEBAR_BG, width=240)
         self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
@@ -86,31 +90,35 @@ class ChatWindow(tk.Tk):
             is_selected = (room_id == self.current_room_id) # highlight the selected room
             bg_color = C_SIDEBAR_SELECTED if is_selected else C_SIDEBAR_BG
 
-            contact_frame = tk.Frame(self.sidebar, bg=bg_color, pady=20, padx=20)
-            contact_frame.pack(fill=tk.X)
+            contact_frame = tk.Frame(self.sidebar, bg=bg_color, pady=10, padx=10)
+            contact_frame.pack(fill=tk.X) 
 
-            # make all chat sessions clickable
             def make_callback(rid):
                 return lambda e: self._select_room(rid)
 
-            contact_frame.bind("<Button-1>", make_callback(room_id))
-
-            display_name = f"Room ID: {room_id}"
-
+            # icon next
             icon = tk.Label(contact_frame, text="💬", font=("Segoe UI", 16),
                             bg=bg_color, fg=C_TEXT_FG)
             icon.pack(side=tk.LEFT, padx=(0, 10))
             icon.bind("<Button-1>", make_callback(room_id))
 
-            name = tk.Label(contact_frame, text=display_name, # room name label
+            # name last, expands into whatever cavity remains
+            name = tk.Label(contact_frame, text=f"Room ID: {room_id}",
                             font=("Segoe UI", 11, "bold"),
                             bg=bg_color, fg=C_TEXT_FG)
-            name.pack(side=tk.LEFT)
+            name.pack(side=tk.LEFT, expand=True, fill=tk.X)
             name.bind("<Button-1>", make_callback(room_id))
 
     def _build_main_area(self):
         self.header_frame = tk.Frame(self.main_area, bg=C_HEADER_BG, pady=15, padx=15)
         self.header_frame.pack(fill=tk.X)
+
+        # delete button
+        self.delete_btn = tk.Button(
+            self.header_frame, text="🗑️ Delete", font=("Segoe UI", 9, "bold"),
+            bg="#AA0000", fg="#FFFFFF", relief=tk.FLAT, padx=8, pady=4,
+            command=self._on_delete_current_room
+        )
 
         self.chat_title = tk.Label(
             self.header_frame,
@@ -126,7 +134,7 @@ class ChatWindow(tk.Tk):
 
         self.chat_frame = tk.Frame(self.chat_canvas, bg=C_MAIN_BG)
         self.chat_canvas.create_window((0, 0), window=self.chat_frame,
-                                       anchor="nw", width=540)
+                                    anchor="nw", width=540)
 
         self.suggestion_frame = tk.Frame(self.main_area, bg=C_MAIN_BG)
         self.suggestion_frame.pack(anchor="w", padx=20)
@@ -138,16 +146,22 @@ class ChatWindow(tk.Tk):
         self.entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
                         padx=(0, 15), ipady=10)
 
-        self.entry.bind("<KeyRelease>", self._on_type) # for autocomplete suggestions
-        self.entry.bind("<Return>", lambda event: self._on_send()) # to send the message
-        self.entry.bind("<Tab>", self._on_tab) # accept autocomplete suggestion
+        self.entry.bind("<KeyRelease>", self._on_type)
+        self.entry.bind("<Return>", lambda event: self._on_send())
+        self.entry.bind("<Tab>", self._on_tab)
 
-        tk.Button( # send button
+        tk.Button(
             input_container, text="➤", font=("Segoe UI", 14),
             bg="#000000", fg="#FFFFFF", relief=tk.FLAT,
             padx=15, pady=2, command=self._on_send
         ).pack(side=tk.RIGHT)
-
+    
+    def _on_delete_current_room(self):
+        if not self.current_room_id:
+            return
+        if messagebox.askyesno("Delete Room", f"Delete room {self.current_room_id}?"):
+            self._delete_room(self.current_room_id)    
+    
     def _create_room(self):
         chat_key = secrets.token_hex(32) # generates a chat key for the user, 32 bytes, 64 hex
 
@@ -236,12 +250,21 @@ class ChatWindow(tk.Tk):
     def _select_room(self, room_id):
         self.current_room_id = room_id
         self.chat_title.config(text=f"Room ID: {room_id}")
+        self.delete_btn.pack(side=tk.RIGHT) 
         self._build_sidebar()
         self._refresh_messages()
 
-    def _refresh_messages(self): # clears chat upon clicking on a new chatroom
+    def _refresh_messages(self): # when navigating between chatrooms
         for widget in self.chat_frame.winfo_children():
             widget.destroy()
+
+        crypto = self.consumer.get_crypto(self.current_room_id)
+        history = self.chat_store.load_history(crypto, self.current_room_id) 
+
+        # Render each message
+        for event in history:
+            incoming = (event.sender_id != self.my_peer_id)
+            self._add_message(event.sender_id, event.text, incoming=incoming)
 
     def _add_message(self, sender, text, incoming=True): # helper for _on_send
         row_frame = tk.Frame(self.chat_frame, bg=C_MAIN_BG)
@@ -271,7 +294,7 @@ class ChatWindow(tk.Tk):
 
         try:
             payload = text.encode("utf-8")
-            self.bus.send(self.current_room_id, payload) # encrypt message
+            self.bus.send(self.my_peer_id, payload)
 
             self.entry.delete(0, tk.END) # delete in entry box
 
@@ -280,11 +303,30 @@ class ChatWindow(tk.Tk):
 
             self._add_message("Me", text, incoming=False) # create message
 
+            event = PlaintextEvent(
+                room_id=self.current_room_id,
+                sender_id=self.my_peer_id,
+                timestamp=time.time(),  
+                text=text,
+            )
+
+            crypto = self.consumer.get_crypto(self.current_room_id)
+            self.chat_store.append(crypto, event)
+
         except Exception as e:
             print(f"Failed to send message: {e}")
 
     def _poll_backend(self):
-        self.after(500, self._poll_backend) # continuously check for new messages
+        events = self.consumer.poll_ui_events()
+
+        for event in events:
+            crypto = self.consumer.get_crypto(event.room_id)
+            self.chat_store.append(crypto, event)
+
+            if event.room_id == self.current_room_id:
+                self._add_message(event.sender_id, event.text, incoming=True)
+
+        self.after(500, self._poll_backend)
 
     def _on_tab(self, event): # for autocomplete
         draft = self.entry.get() # reads text
@@ -352,3 +394,32 @@ class ChatWindow(tk.Tk):
 
         for widget in self.suggestion_frame.winfo_children():
             widget.destroy() # clear suggestions
+
+    def _delete_room(self, room_id):
+        # remove from registry
+        if room_id in self.registry._rooms:
+            self.registry._rooms.remove(room_id)
+
+        # remove chat key mapping
+        keys_to_delete = [k for k, r in self.registry._key_to_room.items() if r == room_id]
+        for k in keys_to_delete:
+            del self.registry._key_to_room[k]
+        self.registry.save_keys()
+
+        # remove crypto
+        if hasattr(self.consumer, "_room_keys"):
+            self.consumer._room_keys.pop(room_id, None)
+
+        # delete chat history file
+        history_file = Path.home() / ".nullchat" / "chats" / f"{room_id}.jsonl"
+        if history_file.exists():
+            history_file.unlink()
+
+        if self.current_room_id == room_id:
+            self.current_room_id = None
+            for widget in self.chat_frame.winfo_children():
+                widget.destroy()
+            self.chat_title.config(text="Join or create a room to start messaging!")
+            self.delete_btn.pack_forget()
+
+        self._build_sidebar()   
