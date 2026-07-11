@@ -77,7 +77,10 @@ class UserProfile:
         self.user_id = normalize_user_id(self.user_id)
 
     def is_self(self, peer_id: str) -> bool:
-        return self.user_id == peer_id.strip().lower()
+        try:
+            return self.user_id == normalize_user_id(peer_id)
+        except InvalidUserId:
+            return False
 
     def add_room(self, room_id: str, display_name: str | None = None,
                  wrapped_key: str | None = None) -> RoomRef:
