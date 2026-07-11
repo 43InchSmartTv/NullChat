@@ -50,7 +50,7 @@ class ChatStore:
                     data = json.loads(body)
                 except (json.JSONDecodeError, KeyError):
                     continue  # in case of one bad line
-               except Exception:
+                except Exception:
                     continue # skip corrupted lines
                 events.append(PlaintextEvent(
                     room_id=room_id,
