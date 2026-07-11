@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import queue
 import threading
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from nullchat.network.message_bus import MessageBus
 from nullchat.network.axl_bridge import InboundMessage
 from nullchat.crypto.room import RoomCrypto
-from nullchat.protocol.messages import Message
+from nullchat.protocol.messages import Message, MSG_TYPE_JOIN
+
+if TYPE_CHECKING:
+    from nullchat.protocol.room_registry import RoomRegistry
 
 @dataclass
 class PlaintextEvent:
@@ -16,8 +22,9 @@ class PlaintextEvent:
 
 
 class MessageConsumer:
-    def __init__(self, bus: MessageBus, out_queue_size: int = 256):
+    def __init__(self, bus: MessageBus, registry: RoomRegistry | None = None, out_queue_size: int = 256):
         self._bus = bus
+        self._registry = registry
         self._room_keys: dict[str, RoomCrypto] = {}
         self._room_keys_lock = threading.Lock()
         self._out: queue.Queue[PlaintextEvent] = queue.Queue(maxsize=out_queue_size)
@@ -84,8 +91,15 @@ class MessageConsumer:
         except Exception:
             return  
 
+        # auto add anyone who can encrypt for this room
+        if self._registry is not None:
+            self._registry.add_member(msg.room_id, msg.sender_id)
+
+        if msg.msg_type == MSG_TYPE_JOIN:
+            return
+
         event = PlaintextEvent(msg.room_id, msg.sender_id, msg.timestamp, plaintext)
         try:
             self._out.put_nowait(event)
         except queue.Full:
-            pass  
+            pass
