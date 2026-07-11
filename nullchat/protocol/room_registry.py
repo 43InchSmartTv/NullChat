@@ -14,6 +14,7 @@ class RoomRegistry: # connects users to rooms
         self._room_to_peers.setdefault(room_id, [])
         if peer_public_key not in self._room_to_peers[room_id]:
             self._room_to_peers[room_id].append(peer_public_key)
+            self.save_keys()
 
     def members_of(self, room_id: str) -> list[str]:
         return list(self._room_to_peers.get(room_id, []))
@@ -26,7 +27,10 @@ class RoomRegistry: # connects users to rooms
         self.save_keys()
 
     def save_keys(self):
-        data = {"keys": self._key_to_room}
+        data = {
+            "keys": self._key_to_room,
+            "members": self._room_to_peers,
+        }
         self._key_file.parent.mkdir(parents=True, exist_ok=True)
         self._key_file.write_text(json.dumps(data))
 
@@ -35,6 +39,7 @@ class RoomRegistry: # connects users to rooms
             return
         data = json.loads(self._key_file.read_text())
         self._key_to_room = data.get("keys", {})
+        self._room_to_peers = data.get("members", {})
 
     def lookup_room_id(self, chat_key):
         return self._key_to_room.get(chat_key)
